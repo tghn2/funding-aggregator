@@ -231,18 +231,10 @@
       <select id="sourceFilter" class="filter" aria-label="Funder">
         <option value="">All funders</option>
       </select>
-      <select id="lmicFilter" class="filter" aria-label="LMIC relevance">
-        <option value="">All LMIC status</option>
-        <option value="relevant">LMIC relevant</option>
-        <option value="eligible">LMIC applicants eligible</option>
-        <option value="lead">LMIC lead applicants</option>
-      </select>
       <select id="statusFilter" class="filter" aria-label="Opportunity status">
-        <option value="open">Open / upcoming</option>
         <option value="">All statuses</option>
         <option value="open">Open</option>
         <option value="upcoming">Upcoming</option>
-        <option value="closed">Closed</option>
       </select>
     </div>
 
@@ -289,7 +281,6 @@
     const searchInput = document.getElementById('searchInput');
     const typeFilter = document.getElementById('typeFilter');
     const sourceFilter = document.getElementById('sourceFilter');
-    const lmicFilter = document.getElementById('lmicFilter');
     const statusFilter = document.getElementById('statusFilter');
     const sortFilter = document.getElementById('sortFilter');
 
@@ -321,13 +312,6 @@
       return formatDate(value);
     }
 
-    function isOpenish(item) {
-      if (item.status === 'open' || item.status === 'upcoming') return true;
-      if (!item.deadline) return item.status !== 'closed';
-      const d = new Date(item.deadline);
-      return !Number.isNaN(d.getTime()) && d.getTime() >= Date.now();
-    }
-
     function labelise(value) {
       return String(value || '')
         .replace(/[-_]+/g, ' ')
@@ -340,21 +324,29 @@
 
     function rebuildFilters() {
       const types = uniqueSorted(allItems.flatMap(i => i.opportunityType || []));
-      const funders = uniqueSorted(allItems.map(i => i.sourceName || i.source));
       const currentType = typeFilter.value;
       const currentSource = sourceFilter.value;
 
+      const counts = new Map();
+      for (const item of allItems) {
+        const key = item.source || item.sourceName || '';
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+
       typeFilter.innerHTML = '<option value="">All types</option>' + types.map(v => `<option value="${esc(v)}">${esc(labelise(v))}</option>`).join('');
-      sourceFilter.innerHTML = '<option value="">All funders</option>' + funders.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+      sourceFilter.innerHTML = '<option value="">All funders</option>' + SOURCES.map(source => {
+        const count = counts.get(source.id) || 0;
+        return `<option value="${esc(source.id)}">${esc(source.label)} (${count})</option>`;
+      }).join('');
+
       if (types.includes(currentType)) typeFilter.value = currentType;
-      if (funders.includes(currentSource)) sourceFilter.value = currentSource;
+      if (SOURCES.some(source => source.id === currentSource)) sourceFilter.value = currentSource;
     }
 
     function filterItems() {
       const q = searchInput.value.trim().toLowerCase();
       const type = typeFilter.value;
       const source = sourceFilter.value;
-      const lmic = lmicFilter.value;
       const status = statusFilter.value;
 
       const filtered = allItems.filter(item => {
@@ -370,13 +362,9 @@
 
         if (q && !haystack.includes(q)) return false;
         if (type && !(item.opportunityType || []).includes(type)) return false;
-        if (source && item.sourceName !== source) return false;
-        if (lmic === 'relevant' && !item.lmicsRelevant) return false;
-        if (lmic === 'eligible' && !item.lmicsCanApply) return false;
-        if (lmic === 'lead' && !item.lmicsCanLead) return false;
-        if (status === 'open' && !isOpenish(item)) return false;
+        if (source && item.source !== source) return false;
+        if (status === 'open' && item.status !== 'open') return false;
         if (status === 'upcoming' && item.status !== 'upcoming') return false;
-        if (status === 'closed' && item.status !== 'closed') return false;
         return true;
       });
 
@@ -394,7 +382,10 @@
 
     function renderHealth() {
       if (!sourceHealth.length) return '';
-      return '<div class="source-health">' + sourceHealth.map(x => `<span class="health-chip ${x.ok ? 'ok' : 'fail'}">${esc(x.label)}: ${x.ok ? 'ok' : 'error'}</span>`).join('') + '</div>';
+      return '<div class="source-health">' + sourceHealth.map(x => {
+        const count = allItems.filter(item => item.source === x.id).length;
+        return `<span class="health-chip ${x.ok ? 'ok' : 'fail'}">${esc(x.label)}: ${x.ok ? 'ok' : 'error'} · ${count}</span>`;
+      }).join('') + '</div>';
     }
 
     function render() {
@@ -402,7 +393,14 @@
       summary.textContent = `${items.length} opportunity${items.length === 1 ? '' : 'ies'} shown from ${allItems.length} collected results`;
 
       if (!items.length) {
-        content.innerHTML = `<div class="state"><div>No funding opportunities match these filters.</div><div class="tiny">Try clearing a filter or searching for a different topic.</div>${renderHealth()}</div>`;
+        const selectedSource = SOURCES.find(source => source.id === sourceFilter.value);
+        const message = selectedSource
+          ? `${esc(selectedSource.label)} has no current open or upcoming opportunities matching these filters.`
+          : 'No funding opportunities match these filters.';
+        const hint = selectedSource
+          ? 'This does not mean the funder has no funding programme; it means no current qualifying calls were returned by this feed.'
+          : 'Try clearing a filter or searching for a different topic.';
+        content.innerHTML = `<div class="state"><div>${message}</div><div class="tiny">${hint}</div>${renderHealth()}</div>`;
         return;
       }
 
@@ -459,7 +457,7 @@
         return { source, items };
       }));
 
-      sourceHealth = settled.map((result, index) => ({ label: SOURCES[index].label, ok: result.status === 'fulfilled' }));
+      sourceHealth = settled.map((result, index) => ({ id: SOURCES[index].id, label: SOURCES[index].label, ok: result.status === 'fulfilled' }));
       allItems = settled.flatMap(result => {
         if (result.status !== 'fulfilled') return [];
         return result.value.items;
@@ -478,7 +476,7 @@
       refreshBtn.disabled = false;
     }
 
-    [searchInput, typeFilter, sourceFilter, lmicFilter, statusFilter, sortFilter].forEach(el => {
+    [searchInput, typeFilter, sourceFilter, statusFilter, sortFilter].forEach(el => {
       el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', render);
     });
     refreshBtn.addEventListener('click', loadOpportunities);
