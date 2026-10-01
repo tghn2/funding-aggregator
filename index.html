@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Latest global health research funding opportunities from authoritative public sources, with a focus on LMIC researchers." />
+  <title>Global Health Research Funding Opportunities</title>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #0c2b64;
+      --accent2: #0072bc;
+      --good: #059669;
+      --warn: #b45309;
+      --bad: #dc2626;
+      --soft-blue: #eef5ff;
+      --soft-green: #ecfdf5;
+      --soft-warn: #fff7ed;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(247,247,245,.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 18px; }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: clamp(1.45rem, 2vw, 2.05rem); line-height: 1.12; }
+    .sub { margin: .4rem 0 0; color: var(--muted); font-size: .95rem; max-width: 760px; }
+    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button, select, input { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 650;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .88rem;
+      white-space: nowrap;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+    .dot.on { background: var(--good); }
+    .dot.busy { background: #f59e0b; }
+    .dot.err { background: var(--bad); }
+
+    main { max-width: 1120px; margin: 0 auto; padding: 22px 18px 44px; }
+    .note {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: .93rem;
+      line-height: 1.55;
+    }
+    .filters {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 18px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(130px, .6fr));
+      gap: 10px;
+      align-items: center;
+    }
+    .search {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      outline: none;
+      background: #fafafa;
+    }
+    .search:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(0,114,188,.08); }
+    .filter {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 12px;
+      flex-wrap: wrap;
+    }
+    .summary { color: var(--muted); font-size: .86rem; }
+    .sort-wrap { display: flex; align-items: center; gap: 8px; }
+    .sort-label { color: var(--muted); font-size: .82rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 8px rgba(0,0,0,.04);
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+    }
+    .card-top { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
+    .meta { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+    .source { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; color: var(--accent); }
+    .date { font-size: .77rem; color: var(--muted); }
+    .title { margin: 0; font-size: 1.03rem; line-height: 1.35; }
+    .title a { color: inherit; text-decoration: none; }
+    .title a:hover { color: var(--accent2); }
+    .excerpt {
+      padding: 0 16px 10px;
+      margin: 0;
+      color: #374151;
+      line-height: 1.48;
+      font-size: .92rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-height: 5.6em;
+      overflow-wrap: anywhere;
+    }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+    .tag {
+      font-size: .71rem;
+      border-radius: 999px;
+      padding: 5px 8px;
+      background: #f3f4f6;
+      color: #4b5563;
+    }
+    .tag.good { background: var(--soft-green); color: #047857; }
+    .tag.blue { background: var(--soft-blue); color: #1d4ed8; }
+    .tag.warn { background: var(--soft-warn); color: #9a3412; }
+    .foot { margin-top: auto; padding: 0 16px 16px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .deadline { font-size: .78rem; color: var(--muted); }
+    .deadline strong { color: var(--text); }
+    .link { font-size: .88rem; color: var(--accent2); text-decoration: none; font-weight: 700; }
+    .link:hover { text-decoration: underline; }
+
+    .state { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 42px 18px; text-align: center; color: var(--muted); }
+    .spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #d1d5db; border-top-color: var(--accent); animation: spin .8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .source-health { margin-top: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .health-chip { font-size: .72rem; padding: 5px 8px; border-radius: 999px; background: #f3f4f6; color: var(--muted); }
+    .health-chip.ok { background: var(--soft-green); color: #047857; }
+    .health-chip.fail { background: #fef2f2; color: #b91c1c; }
+    .tiny { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+    .footer { max-width: 1120px; margin: 0 auto; padding: 0 18px 28px; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+    .footer a { color: var(--accent2); }
+
+    @media (max-width: 820px) {
+      .filters { grid-template-columns: 1fr 1fr; }
+      .search { grid-column: 1 / -1; }
+    }
+    @media (max-width: 560px) {
+      .filters { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .actions { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <h1>Global Health Research Funding Opportunities</h1>
+          <p class="sub">A simple public feed of current funding, fellowship, training and research opportunities from authoritative sources, with a focus on researchers and institutions in LMICs.</p>
+        </div>
+        <div class="actions">
+          <span class="pill"><span id="statusDot" class="dot busy"></span><span id="statusText">Loading…</span></span>
+          <button id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="note">
+      Opportunities are linked to the original funder or authoritative source. Eligibility, deadlines and terms can change, so check the source page before applying. This first version focuses on a small curated set of global-health funding sources.
+    </div>
+
+    <div class="filters" aria-label="Funding opportunity filters">
+      <input id="searchInput" class="search" type="search" placeholder="Search opportunities, funders or topics…" autocomplete="off" />
+      <select id="typeFilter" class="filter" aria-label="Opportunity type">
+        <option value="">All types</option>
+      </select>
+      <select id="sourceFilter" class="filter" aria-label="Funder">
+        <option value="">All funders</option>
+      </select>
+      <select id="lmicFilter" class="filter" aria-label="LMIC relevance">
+        <option value="">All LMIC status</option>
+        <option value="relevant">LMIC relevant</option>
+        <option value="eligible">LMIC applicants eligible</option>
+        <option value="lead">LMIC lead applicants</option>
+      </select>
+      <select id="statusFilter" class="filter" aria-label="Opportunity status">
+        <option value="open">Open / upcoming</option>
+        <option value="">All statuses</option>
+        <option value="open">Open</option>
+        <option value="upcoming">Upcoming</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+
+    <div class="summary-row">
+      <div id="summary" class="summary">Preparing feed…</div>
+      <div class="sort-wrap">
+        <span class="sort-label">Sort</span>
+        <select id="sortFilter" class="filter" aria-label="Sort opportunities" style="width:auto;min-width:160px;">
+          <option value="latest">Latest added</option>
+          <option value="deadline">Closing soon</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="content">
+      <div class="state"><div class="spinner"></div><div>Fetching funding sources…</div><div class="tiny">This can take a few seconds.</div></div>
+    </div>
+  </main>
+
+  <div class="footer">
+    Public research-funding discovery feed. Source content remains with the original organisations. Built to be lightweight and embeddable into simple HTML websites.
+  </div>
+
+  <script>
+    const SOURCES = [
+      { id: 'fogarty', label: 'NIH Fogarty', url: '/.netlify/functions/fogarty' },
+      { id: 'wellcome', label: 'Wellcome', url: '/.netlify/functions/wellcome' },
+      { id: 'edctp3', label: 'Global Health EDCTP3', url: '/.netlify/functions/edctp3' },
+      { id: 'tdr', label: 'WHO/TDR', url: '/.netlify/functions/tdr' },
+      { id: 'idrc', label: 'IDRC', url: '/.netlify/functions/idrc' },
+      { id: 'grandchallenges', label: 'Grand Challenges', url: '/.netlify/functions/grandchallenges' }
+    ];
+
+    const MAX_PER_SOURCE = 30;
+    const MAX_TOTAL = 120;
+    let allItems = [];
+    let sourceHealth = [];
+
+    const content = document.getElementById('content');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const summary = document.getElementById('summary');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const searchInput = document.getElementById('searchInput');
+    const typeFilter = document.getElementById('typeFilter');
+    const sourceFilter = document.getElementById('sourceFilter');
+    const lmicFilter = document.getElementById('lmicFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const sortFilter = document.getElementById('sortFilter');
+
+    function setStatus(kind, text) {
+      statusDot.className = 'dot ' + kind;
+      statusText.textContent = text;
+    }
+
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatDate(value) {
+      if (!value) return 'Unknown';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return 'Unknown';
+      return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+    }
+
+    function formatDeadline(value) {
+      if (!value) return 'Deadline not stated';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return 'Deadline not stated';
+      return formatDate(value);
+    }
+
+    function isOpenish(item) {
+      if (item.status === 'open' || item.status === 'upcoming') return true;
+      if (!item.deadline) return item.status !== 'closed';
+      const d = new Date(item.deadline);
+      return !Number.isNaN(d.getTime()) && d.getTime() >= Date.now();
+    }
+
+    function labelise(value) {
+      return String(value || '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function uniqueSorted(values) {
+      return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+    }
+
+    function rebuildFilters() {
+      const types = uniqueSorted(allItems.flatMap(i => i.opportunityType || []));
+      const funders = uniqueSorted(allItems.map(i => i.sourceName || i.source));
+      const currentType = typeFilter.value;
+      const currentSource = sourceFilter.value;
+
+      typeFilter.innerHTML = '<option value="">All types</option>' + types.map(v => `<option value="${esc(v)}">${esc(labelise(v))}</option>`).join('');
+      sourceFilter.innerHTML = '<option value="">All funders</option>' + funders.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+      if (types.includes(currentType)) typeFilter.value = currentType;
+      if (funders.includes(currentSource)) sourceFilter.value = currentSource;
+    }
+
+    function filterItems() {
+      const q = searchInput.value.trim().toLowerCase();
+      const type = typeFilter.value;
+      const source = sourceFilter.value;
+      const lmic = lmicFilter.value;
+      const status = statusFilter.value;
+
+      const filtered = allItems.filter(item => {
+        const haystack = [
+          item.title,
+          item.summary,
+          item.sourceName,
+          ...(item.topics || []),
+          ...(item.opportunityType || []),
+          ...(item.careerStage || []),
+          ...(item.geography || [])
+        ].join(' ').toLowerCase();
+
+        if (q && !haystack.includes(q)) return false;
+        if (type && !(item.opportunityType || []).includes(type)) return false;
+        if (source && item.sourceName !== source) return false;
+        if (lmic === 'relevant' && !item.lmicsRelevant) return false;
+        if (lmic === 'eligible' && !item.lmicsCanApply) return false;
+        if (lmic === 'lead' && !item.lmicsCanLead) return false;
+        if (status === 'open' && !isOpenish(item)) return false;
+        if (status === 'upcoming' && item.status !== 'upcoming') return false;
+        if (status === 'closed' && item.status !== 'closed') return false;
+        return true;
+      });
+
+      filtered.sort((a, b) => {
+        if (sortFilter.value === 'deadline') {
+          const ad = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
+          const bd = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+          return ad - bd || new Date(b.publishedAt || b.retrievedAt || 0) - new Date(a.publishedAt || a.retrievedAt || 0);
+        }
+        return new Date(b.publishedAt || b.retrievedAt || 0).getTime() - new Date(a.publishedAt || a.retrievedAt || 0).getTime();
+      });
+
+      return filtered.slice(0, MAX_TOTAL);
+    }
+
+    function renderHealth() {
+      if (!sourceHealth.length) return '';
+      return '<div class="source-health">' + sourceHealth.map(x => `<span class="health-chip ${x.ok ? 'ok' : 'fail'}">${esc(x.label)}: ${x.ok ? 'ok' : 'error'}</span>`).join('') + '</div>';
+    }
+
+    function render() {
+      const items = filterItems();
+      summary.textContent = `${items.length} opportunity${items.length === 1 ? '' : 'ies'} shown from ${allItems.length} collected results`;
+
+      if (!items.length) {
+        content.innerHTML = `<div class="state"><div>No funding opportunities match these filters.</div><div class="tiny">Try clearing a filter or searching for a different topic.</div>${renderHealth()}</div>`;
+        return;
+      }
+
+      content.innerHTML = `<section class="grid">${items.map(item => {
+        const tags = [
+          ...(item.opportunityType || []).slice(0, 2),
+          ...(item.careerStage || []).slice(0, 1),
+          ...(item.topics || []).slice(0, 2)
+        ];
+        if (item.lmicsCanLead) tags.unshift('LMIC lead eligible');
+        else if (item.lmicsCanApply) tags.unshift('LMIC applicants');
+        else if (item.lmicsRelevant) tags.unshift('LMIC relevant');
+
+        const deadlineText = formatDeadline(item.deadline);
+        const deadlineClass = item.deadline && new Date(item.deadline).getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14 ? 'warn' : '';
+
+        return `
+          <article class="card">
+            <div class="card-top">
+              <div class="meta">
+                <span class="source">${esc(item.sourceName || item.source || 'Funding source')}</span>
+                <span class="date">Added ${esc(formatDate(item.publishedAt || item.retrievedAt))}</span>
+              </div>
+              <h2 class="title"><a href="${esc(item.url || '#')}" target="_blank" rel="noopener noreferrer">${esc(item.title || 'Funding opportunity')}</a></h2>
+            </div>
+            <p class="excerpt">${esc(item.summary || 'No summary available.')}</p>
+            <div class="badges">
+              ${tags.slice(0, 5).map((tag, idx) => `<span class="tag ${idx === 0 && /LMIC/i.test(labelise(tag)) ? 'good' : idx === 0 ? 'blue' : ''}">${esc(labelise(tag))}</span>`).join('')}
+            </div>
+            <div class="foot">
+              <span class="deadline ${deadlineClass}"><strong>Deadline:</strong> ${esc(deadlineText)}</span>
+              <a class="link" href="${esc(item.url || '#')}" target="_blank" rel="noopener noreferrer">View opportunity →</a>
+            </div>
+          </article>`;
+      }).join('')}</section>`;
+    }
+
+    async function fetchSource(source) {
+      const res = await fetch(source.url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`${source.label} ${res.status}`);
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data.items || []);
+      return items.slice(0, MAX_PER_SOURCE);
+    }
+
+    async function loadOpportunities() {
+      refreshBtn.disabled = true;
+      setStatus('busy', 'Loading funding sources…');
+      summary.textContent = 'Fetching authoritative sources…';
+      content.innerHTML = '<div class="state"><div class="spinner"></div><div>Fetching funding sources…</div><div class="tiny">Checking the latest public listings.</div></div>';
+
+      const settled = await Promise.allSettled(SOURCES.map(async source => {
+        const items = await fetchSource(source);
+        return { source, items };
+      }));
+
+      sourceHealth = settled.map((result, index) => ({ label: SOURCES[index].label, ok: result.status === 'fulfilled' }));
+      allItems = settled.flatMap(result => {
+        if (result.status !== 'fulfilled') return [];
+        return result.value.items;
+      }).filter(item => item && item.title && item.url);
+
+      rebuildFilters();
+
+      const okCount = sourceHealth.filter(x => x.ok).length;
+      if (!allItems.length) {
+        setStatus('err', 'No opportunities returned');
+        content.innerHTML = `<div class="state"><div>No funding opportunities were returned by the configured sources.</div><div class="tiny">Try Refresh again later.</div>${renderHealth()}</div>`;
+      } else {
+        setStatus(okCount === SOURCES.length ? 'on' : 'busy', `${allItems.length} opportunities · ${okCount}/${SOURCES.length} sources`);
+        render();
+      }
+      refreshBtn.disabled = false;
+    }
+
+    [searchInput, typeFilter, sourceFilter, lmicFilter, statusFilter, sortFilter].forEach(el => {
+      el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', render);
+    });
+    refreshBtn.addEventListener('click', loadOpportunities);
+    loadOpportunities();
+  </script>
+</body>
+</html>
