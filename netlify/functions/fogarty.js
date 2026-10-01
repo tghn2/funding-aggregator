@@ -29,19 +29,22 @@ function parseFogarty(html, now = new Date()) {
     const fundingType = cellTexts[cells.length - 1] || '';
     const deadlineDate = new Date(dateText);
     const deadline = Number.isNaN(deadlineDate.getTime()) ? null : deadlineDate.toISOString();
-    const status = !deadline ? 'unknown' : (deadlineDate >= now ? 'open' : 'closed');
+    if (!deadline || deadlineDate < now) continue;
 
     items.push(makeOpportunity({
       source: 'fogarty',
       sourceName: 'NIH Fogarty International Center',
       title,
       url,
-      summary: fundingType ? `${fundingType}. Fogarty global health research funding opportunity.` : 'Fogarty global health research funding opportunity.',
+      summary: /Emerging Global Leader|K43/i.test(title)
+        ? 'Career development award for early-career research scientists at eligible LMIC institutions to develop an independent global health research programme.'
+        : (fundingType ? `${fundingType}. Fogarty global health research funding opportunity.` : 'Fogarty global health research funding opportunity.'),
       deadline,
-      status,
+      deadlineType: 'fixed',
+      status: 'open',
       recordType: 'open-call',
       callType: 'NIH funding opportunity announcement',
-      opportunityType: /career development/i.test(fundingType) ? ['career-development', 'research-grant'] : ['research-grant'],
+      opportunityType: /career development|K43/i.test(`${title} ${fundingType}`) ? ['career-development', 'research-grant'] : ['research-grant'],
       careerStage: careerFor(title, fundingType),
       topics: ['global-health'],
       geography: ['LMIC'],
@@ -49,18 +52,18 @@ function parseFogarty(html, now = new Date()) {
       lmicsCanApply: true,
       lmicsCanLead: true,
       eligibilityVerified: true,
-      eligibilityNotes: 'Fogarty K43 and similar LMIC-focused programmes require applicants to follow the specific NOFO and Fogarty country-eligibility rules.',
+      eligibilityNotes: 'Fogarty LMIC-focused career-development programmes require applicants to follow the specific NOFO and Fogarty country-eligibility rules.',
       raw: { dueDate: dateText, fundingType }
     }));
   }
-  return dedupe(items).filter(x => x.status !== 'closed');
+  return dedupe(items);
 }
 
 exports.handler = async () => {
   try {
     const html = await fetchText(SOURCE_URL);
     const items = parseFogarty(html);
-    return jsonResponse(items, { source: 'fogarty', sourceUrl: SOURCE_URL, parser: 'html-table-v2', filtering: 'open calls only' });
+    return jsonResponse(items, { source: 'fogarty', sourceUrl: SOURCE_URL, parser: 'html-table-v3', filtering: 'future deadlines only' });
   } catch (err) { return errorResponse('fogarty', err); }
 };
 exports._parse = parseFogarty;

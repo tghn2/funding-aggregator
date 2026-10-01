@@ -39,7 +39,7 @@ async function fetchText(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers = {} } =
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'TGHN-Global-Health-Funding/0.2 (+https://www.tghn.org)',
+        'User-Agent': 'TGHN-Global-Health-Funding/0.3 (+https://www.tghn.org)',
         'Accept': 'text/html,application/xhtml+xml,application/xml,application/rss+xml,application/json;q=0.9,*/*;q=0.8',
         ...headers
       }
@@ -73,10 +73,9 @@ function extractDate(text = '') {
 
 function extractDeadlineLabel(text = '') {
   const clean = stripHtml(text);
-  if (/no deadline\s*-?\s*apply anytime|apply anytime|applications are accepted year-round/i.test(clean)) return 'Apply anytime';
-  const vary = clean.match(/(?:application )?deadlines? vary[^.]{0,160}/i);
+  if (/apply anytime|applications are accepted year-round|accepted on a rolling basis/i.test(clean)) return /rolling basis|accepted on a rolling basis/i.test(clean) ? 'Rolling basis' : 'Apply anytime';
+  const vary = clean.match(/(?:application )?deadlines? vary[^.]{0,220}/i);
   if (vary) return vary[0].trim();
-  if (/rolling basis/i.test(clean)) return 'Rolling basis';
   return null;
 }
 
@@ -137,36 +136,45 @@ function inferTopics(text = '') {
     ['sexual-reproductive-health', /sexual and reproductive|reproductive health/],
     ['one-health', /one health|zoonotic|zoonoses/],
     ['vaccines', /vaccine|vaccination|immuni[sz]/],
-    ['diagnostics', /diagnostic|sequencing|genomic/],
-    ['nutrition', /nutrition|malnutrition|food system/]
+    ['diagnostics', /diagnostic|sequencing/],
+    ['genomics', /genomics|genomic/],
+    ['bioethics', /bioethic|ethics/],
+    ['nutrition', /nutrition|malnutrition|food system/],
+    ['global-health', /global health/]
   ];
-  return map.filter(([, re]) => re.test(t)).map(([tag]) => tag);
+  return [...new Set(map.filter(([, re]) => re.test(t)).map(([tag]) => tag))];
 }
 
 function isHealthRelevant(text = '') {
   const t = stripHtml(text).toLowerCase();
-  return /health|medical|medicine|disease|clinical|public health|epidemi|healthcare|biomedical|biology|nutrition|mental|reproductive|maternal|child|vaccine|diagnostic|pathogen|infection|malaria|tuberculosis|hiv|one health|pharmac|genomic/.test(t);
+  return /health|medical|medicine|disease|clinical|public health|epidemi|healthcare|biomedical|biology|nutrition|mental|reproductive|maternal|child|vaccine|diagnostic|pathogen|infection|malaria|tuberculosis|hiv|one health|pharmac|genomic|health systems?/.test(t);
 }
 
-function statusFromDeadline(deadline, fallback = 'unknown') {
+function statusFromDeadline(deadline, fallback = 'unknown', now = new Date()) {
   if (!deadline) return fallback;
   const d = new Date(deadline);
   if (Number.isNaN(d.getTime())) return fallback;
-  return d.getTime() >= Date.now() ? 'open' : 'closed';
+  return d.getTime() >= now.getTime() ? 'open' : 'closed';
 }
 
 function makeOpportunity(opts) {
   const {
     source, sourceName, title, url, summary = '', publishedAt = null,
-    deadline = null, deadlineLabel = null, status = 'unknown', recordType = 'open-call',
-    callType = null, opportunityType, careerStage, topics, geography = [],
+    deadline = null, deadlineLabel = null, deadlineType = null, deadlineRange = null,
+    status = 'unknown', recordType = 'open-call', callType = null,
+    opportunityType, careerStage, topics, geography = [],
     lmicsRelevant = null, lmicsCanApply = null, lmicsCanLead = null,
     eligibilityVerified = false, eligibilityNotes = null,
-    fundingAmount = null, applicationOpenDate = null, raw = {}
+    fundingAmount = null, applicationOpenDate = null, relatedOpportunities = null,
+    raw = {}
   } = opts;
+
   const combined = `${title || ''} ${summary || ''}`;
+  const finalDeadlineType = deadlineType || (deadlineRange ? 'varies' : (deadline ? 'fixed' : (deadlineLabel ? (/rolling|anytime/i.test(deadlineLabel) ? 'rolling' : 'unknown') : 'unknown')));
+  const finalDeadline = deadline || (finalDeadlineType === 'fixed' ? extractDate(combined) : null);
+
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id: stableId(source, url, title),
     source,
     sourceName,
@@ -175,8 +183,10 @@ function makeOpportunity(opts) {
     summary: stripHtml(summary || '').slice(0, 1200),
     publishedAt: publishedAt || null,
     applicationOpenDate: applicationOpenDate || null,
-    deadline: deadline || extractDate(combined),
+    deadline: finalDeadline,
     deadlineLabel: deadlineLabel || extractDeadlineLabel(combined),
+    deadlineType: finalDeadlineType,
+    deadlineRange: deadlineRange || null,
     status,
     recordType,
     callType,
@@ -190,6 +200,7 @@ function makeOpportunity(opts) {
     eligibilityVerified: Boolean(eligibilityVerified),
     eligibilityNotes,
     fundingAmount: fundingAmount || extractAmount(combined),
+    relatedOpportunities: relatedOpportunities || null,
     retrievedAt: new Date().toISOString(),
     raw
   };
@@ -203,7 +214,7 @@ function jsonResponse(items, meta = {}, statusCode = 200) {
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'public, max-age=900, s-maxage=1800'
     },
-    body: JSON.stringify({ items, meta: { count: items.length, schemaVersion: 2, ...meta } })
+    body: JSON.stringify({ items, meta: { count: items.length, schemaVersion: 3, ...meta } })
   };
 }
 

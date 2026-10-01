@@ -1,6 +1,6 @@
 const {
   fetchText, stripHtml, extractNextData, walkObjects, absoluteUrl, makeOpportunity,
-  jsonResponse, errorResponse, dedupe, extractDate, extractDeadlineLabel, inferTopics
+  jsonResponse, errorResponse, dedupe, extractDeadlineLabel, inferTopics
 } = require('./_shared');
 
 const SOURCE_URL = 'https://www.grandchallenges.org/grant-opportunities';
@@ -45,37 +45,67 @@ function fromVisibleText(html) {
   return items;
 }
 
-function normalizeCandidate(c) {
+function parseDeadlineRange(text) {
+  const clean = stripHtml(text);
+  const m = clean.match(/deadlines? vary from\s+([A-Za-z]+\s+\d{1,2},?\s+20\d{2})\s+through\s+([A-Za-z]+\s+\d{1,2},?\s+20\d{2})/i);
+  if (!m) return null;
+  const earliest = new Date(m[1]);
+  const latest = new Date(m[2]);
+  if (Number.isNaN(earliest.getTime()) || Number.isNaN(latest.getTime())) return null;
+  return { earliest: earliest.toISOString(), latest: latest.toISOString() };
+}
+
+function normalizeCandidate(c, now = new Date()) {
   const combined = `${c.title} ${c.initiative || ''} ${c.description || ''}`;
-  const status = /open/i.test(c.statusText || '') ? 'open' : (/opening soon/i.test(c.statusText || '') ? 'upcoming' : (/closed/i.test(c.statusText || '') ? 'closed' : 'unknown'));
-  if (status === 'closed') return null;
+  const statusText = c.statusText || '';
+  if (/closed/i.test(statusText)) return null;
   const lmic = /low- and middle-income|low- or middle-income|\bLMIC|global south|sub[- ]saharan africa|developing countr/i.test(combined);
+  const range = parseDeadlineRange(c.description);
+  const latest = range ? new Date(range.latest) : null;
+  if (range && (!latest || Number.isNaN(latest.getTime()) || latest < now)) return null;
+  if (!range && !/open|opening soon/i.test(statusText)) return null;
+
+  const isTravel = /travel award|travel support/i.test(combined);
+  const isVirtualAccess = /livestream|on.?demand|virtual viewing/i.test(combined);
+  const opportunityType = isTravel ? ['travel-award'] : ['challenge', 'research-grant'];
+  const relatedOpportunities = isTravel && isVirtualAccess ? ['Global Health Awards - virtual access'] : (isTravel ? ['Global Health Awards - virtual access'] : null);
+
   return makeOpportunity({
     source: 'grandchallenges', sourceName: 'Grand Challenges',
-    title: c.title, url: c.url || SOURCE_URL, summary: c.description,
-    deadline: extractDate(c.description), deadlineLabel: extractDeadlineLabel(c.description),
-    status, recordType: status === 'upcoming' ? 'upcoming-call' : 'open-call',
-    opportunityType: /travel award|travel support/i.test(combined) ? ['travel-award', 'training'] : ['challenge', 'research-grant'],
-    topics: inferTopics(combined), geography: lmic ? ['LMIC'] : [],
-    lmicsRelevant: lmic, lmicsCanApply: lmic ? true : null, lmicsCanLead: null,
+    title: isTravel ? 'Keystone Symposia: Global Health Travel Awards for 2027 Conferences' : c.title,
+    url: c.url || SOURCE_URL,
+    summary: c.description,
+    deadline: null,
+    deadlineLabel: range ? 'Deadlines vary by conference' : extractDeadlineLabel(c.description),
+    deadlineType: range ? 'varies' : (/rolling|apply anytime/i.test(c.description) ? 'rolling' : 'unknown'),
+    deadlineRange: range,
+    status: /opening soon/i.test(statusText) ? 'upcoming' : 'open',
+    recordType: /opening soon/i.test(statusText) ? 'upcoming-call' : 'open-call',
+    opportunityType,
+    topics: [...new Set([...inferTopics(combined), ...(isTravel ? ['global-health'] : [])])],
+    geography: lmic ? ['LMIC'] : [],
+    lmicsRelevant: lmic,
+    lmicsCanApply: lmic ? true : null,
+    lmicsCanLead: null,
     eligibilityVerified: false,
-    eligibilityNotes: lmic ? 'The opportunity explicitly references LMIC participation; detailed applicant and lead eligibility should be verified on the linked opportunity page.' : null,
+    eligibilityNotes: lmic ? 'The opportunity explicitly references LMIC participation; detailed applicant eligibility should be verified on the linked opportunity page.' : null,
+    relatedOpportunities,
     raw: { listing: SOURCE_URL, initiative: c.initiative || null }
   });
 }
 
-function parseGrandChallenges(html) {
+function parseGrandChallenges(html, now = new Date()) {
   const structured = fromNextData(html);
   const visible = fromVisibleText(html);
   const source = structured.length ? structured : visible;
-  return dedupe(source.map(normalizeCandidate).filter(Boolean));
+  return dedupe(source.map(c => normalizeCandidate(c, now)).filter(Boolean));
 }
 
 exports.handler = async () => {
   try {
     const html = await fetchText(SOURCE_URL);
     const items = parseGrandChallenges(html);
-    return jsonResponse(items, { source: 'grandchallenges', sourceUrl: SOURCE_URL, parser: 'next-data-or-visible-text-v2', note: 'Utility/footer links are excluded; structured page data is preferred when available.' });
+    return jsonResponse(items, { source: 'grandchallenges', sourceUrl: SOURCE_URL, parser: 'next-data-or-visible-text-v3', note: 'Only non-utility opportunity records are emitted. Variable deadlines are represented as a range rather than a single misleading deadline.' });
   } catch (err) { return errorResponse('grandchallenges', err); }
 };
 exports._parse = parseGrandChallenges;
