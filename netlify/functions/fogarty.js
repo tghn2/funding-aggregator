@@ -3,7 +3,14 @@ const { fetchText, stripHtml, absoluteUrl, makeOpportunity, jsonResponse, errorR
 const SOURCE_URL = 'https://www.fic.nih.gov/Funding/Pages/Fogarty-Funding-Opps.aspx';
 const BASE_URL = 'https://www.fic.nih.gov';
 
-function parseFogarty(html) {
+function careerFor(title, fundingType) {
+  const text = `${title} ${fundingType}`;
+  if (/Emerging Global Leader|K43/i.test(text)) return ['early-career'];
+  if (/career development/i.test(text)) return ['early-career', 'mid-career'];
+  return [];
+}
+
+function parseFogarty(html, now = new Date()) {
   const items = [];
   const rowRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
   let m;
@@ -19,30 +26,41 @@ function parseFogarty(html) {
     const title = anchor ? stripHtml(anchor[2]) : cellTexts[1];
     if (!title || /due date|fogarty program/i.test(title)) continue;
     const url = anchor ? absoluteUrl(anchor[1], BASE_URL) : SOURCE_URL;
-    const type = cellTexts[cells.length - 1] || '';
-    const deadline = new Date(dateText);
+    const fundingType = cellTexts[cells.length - 1] || '';
+    const deadlineDate = new Date(dateText);
+    const deadline = Number.isNaN(deadlineDate.getTime()) ? null : deadlineDate.toISOString();
+    const status = !deadline ? 'unknown' : (deadlineDate >= now ? 'open' : 'closed');
 
     items.push(makeOpportunity({
       source: 'fogarty',
       sourceName: 'NIH Fogarty International Center',
       title,
       url,
-      summary: type ? `${type}. Fogarty global health research funding opportunity.` : 'Fogarty global health research funding opportunity.',
-      deadline: Number.isNaN(deadline.getTime()) ? null : deadline.toISOString(),
-      status: Number.isNaN(deadline.getTime()) ? 'unknown' : (deadline >= new Date() ? 'open' : 'closed'),
+      summary: fundingType ? `${fundingType}. Fogarty global health research funding opportunity.` : 'Fogarty global health research funding opportunity.',
+      deadline,
+      status,
+      recordType: 'open-call',
+      callType: 'NIH funding opportunity announcement',
+      opportunityType: /career development/i.test(fundingType) ? ['career-development', 'research-grant'] : ['research-grant'],
+      careerStage: careerFor(title, fundingType),
+      topics: ['global-health'],
+      geography: ['LMIC'],
       lmicsRelevant: true,
-      raw: { dueDate: dateText, fundingType: type }
+      lmicsCanApply: true,
+      lmicsCanLead: true,
+      eligibilityVerified: true,
+      eligibilityNotes: 'Fogarty K43 and similar LMIC-focused programmes require applicants to follow the specific NOFO and Fogarty country-eligibility rules.',
+      raw: { dueDate: dateText, fundingType }
     }));
   }
-  return dedupe(items);
+  return dedupe(items).filter(x => x.status !== 'closed');
 }
 
 exports.handler = async () => {
   try {
     const html = await fetchText(SOURCE_URL);
     const items = parseFogarty(html);
-    return jsonResponse(items, { source: 'fogarty', sourceUrl: SOURCE_URL, parser: 'html-table' });
+    return jsonResponse(items, { source: 'fogarty', sourceUrl: SOURCE_URL, parser: 'html-table-v2', filtering: 'open calls only' });
   } catch (err) { return errorResponse('fogarty', err); }
 };
-
 exports._parse = parseFogarty;

@@ -1,63 +1,52 @@
-const { fetchText, stripHtml, extractAnchors, windowAround, makeOpportunity, jsonResponse, errorResponse, dedupe, extractDate } = require('./_shared');
+const { fetchText, extractAnchors, stripHtml, makeOpportunity, jsonResponse, errorResponse, dedupe, extractDate, inferTopics } = require('./_shared');
 
-// TDR's grants landing page points users to the eTDR portal for open calls, but individual
-// calls are also published on WHO/TDR and WHO regional-office pages. This adapter extracts
-// call-like links from the authoritative TDR grants page and deliberately avoids guessing
-// hidden eTDR endpoints. Add regional WHO feeds in a second adapter when required.
 const SOURCE_URL = 'https://tdr.who.int/grants';
 const BASE_URL = 'https://tdr.who.int';
 
-function parseTdr(html) {
+function findPortalUrl(html) {
+  const a = extractAnchors(html, BASE_URL).find(x => /etdr portal/i.test(x.text) || /Open_Call|etdr/i.test(x.url));
+  return a ? a.url : null;
+}
+
+function parseDirectCalls(html, now = new Date()) {
   const anchors = extractAnchors(html, BASE_URL).filter(a => {
-    const t = a.text.toLowerCase();
-    return /call for|grant|scholarship|postgraduate|impact grants|clinical research leadership|funding/.test(t) && a.text.length > 12;
+    const t = a.text.trim();
+    return /^(?:open )?call for|^call for applications|^invitation for applications|^request for proposals/i.test(t)
+      && !/grants and other funding opportunities/i.test(t);
   });
-
-  const items = anchors.map(a => {
-    const context = windowAround(html, a.index, 1800);
-    const text = stripHtml(context);
-    const isPortal = /etdr/i.test(a.text) || /etdr/i.test(a.url);
-    const title = isPortal ? 'TDR open calls for applications (eTDR portal)' : a.text;
-    return makeOpportunity({
-      source: 'tdr',
-      sourceName: 'WHO/TDR',
-      title,
-      url: a.url,
-      summary: isPortal
-        ? 'TDR publishes current competitive research grant calls through the eTDR portal. Check the portal for the latest open calls and application requirements.'
-        : text.slice(0, 650),
-      deadline: extractDate(text),
-      status: isPortal ? 'open' : 'unknown',
-      geography: ['LMIC'],
-      lmicsRelevant: true,
-      lmicsCanApply: true,
-      raw: { listing: SOURCE_URL, portalLink: isPortal }
-    });
-  });
-
-  // Always include the authoritative grants landing page as a resilient fallback.
-  items.push(makeOpportunity({
-    source: 'tdr',
-    sourceName: 'WHO/TDR',
-    title: 'TDR grants and open calls for applications',
-    url: SOURCE_URL,
-    summary: 'TDR funds research projects in diseases of poverty and research-capacity development in countries where these diseases are prevalent. The grants page links to current open calls in the eTDR portal.',
-    status: 'open',
-    geography: ['LMIC'],
-    lmicsRelevant: true,
-    lmicsCanApply: true,
-    opportunityType: ['research-grant', 'training']
-  }));
-
+  const items = [];
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    const next = anchors[i + 1] ? anchors[i + 1].index : Math.min(html.length, a.index + 4500);
+    const snippet = stripHtml(html.slice(a.index, next));
+    const deadline = extractDate(snippet);
+    const status = deadline ? (new Date(deadline) >= now ? 'open' : 'closed') : (/open/i.test(snippet) ? 'open' : 'unknown');
+    if (status === 'closed') continue;
+    items.push(makeOpportunity({
+      source: 'tdr', sourceName: 'WHO/TDR', title: a.text, url: a.url,
+      summary: snippet.slice(0, 800), deadline, status,
+      recordType: 'open-call',
+      opportunityType: ['research-grant'], topics: inferTopics(snippet),
+      geography: ['LMIC'], lmicsRelevant: true, lmicsCanApply: true, lmicsCanLead: null,
+      eligibilityVerified: false,
+      eligibilityNotes: 'TDR calls are competitive and commonly target countries affected by diseases of poverty; exact applicant and lead eligibility must be checked in the specific call.',
+      raw: { listing: SOURCE_URL }
+    }));
+  }
   return dedupe(items);
 }
 
 exports.handler = async () => {
   try {
     const html = await fetchText(SOURCE_URL);
-    const items = parseTdr(html);
-    return jsonResponse(items, { source: 'tdr', sourceUrl: SOURCE_URL, parser: 'html-links', note: 'TDR open calls are principally published through the eTDR portal.' });
+    const portalUrl = findPortalUrl(html);
+    const items = parseDirectCalls(html);
+    return jsonResponse(items, {
+      source: 'tdr', sourceUrl: SOURCE_URL, portalUrl,
+      parser: 'open-calls-only-v2',
+      note: items.length ? 'Direct current call links were found on the TDR grants page.' : 'No direct open-call records were exposed on the public grants landing page. TDR directs users to the eTDR portal for current and past calls; evergreen programme/navigation links are intentionally not emitted as opportunities.'
+    });
   } catch (err) { return errorResponse('tdr', err); }
 };
-
-exports._parse = parseTdr;
+exports._parse = parseDirectCalls;
+exports._findPortalUrl = findPortalUrl;
