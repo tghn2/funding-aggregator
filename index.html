@@ -390,7 +390,7 @@
 
     function render() {
       const items = filterItems();
-      summary.textContent = `${items.length} opportunity${items.length === 1 ? 'y' : 'ies'} shown from ${allItems.length} collected results`;
+      summary.textContent = `${items.length} opportunity${items.length === 1 ? 'opportunity' : 'opportunities'} shown from ${allItems.length} collected results`;
 
       if (!items.length) {
         const selectedSource = SOURCES.find(source => source.id === sourceFilter.value);
