@@ -156,7 +156,7 @@
       padding: 12px;
       margin-bottom: 18px;
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(130px, .6fr));
+      grid-template-columns: 2fr repeat(3, 1fr);
       gap: 10px;
       align-items: center;
     }
@@ -633,8 +633,6 @@
 
     function render() {
       const items = filterItems();
-      // summary.textContent = `${items.length} opportunity${items.length === 1 ? '' : 'opportunities'} shown from ${allItems.length} collected results`;
-
       summary.textContent =
         `${items.length} ${items.length === 1 ? 'opportunity' : 'opportunities'} ` +
         `shown from ${allItems.length} ${allItems.length === 1 ? 'collected result' : 'collected results'}`;
