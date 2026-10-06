@@ -208,7 +208,7 @@
       <div class="top">
         <div>
           <h1>Global Health Research Funding Opportunities</h1>
-          <p class="sub">A simple public feed of current funding, fellowship, training and research opportunities from authoritative sources, with a focus on researchers and institutions in LMICs.</p>
+          <p class="sub">A feed of current funding, fellowship, training and research opportunities from a curated set of authoritative global health funding sources</p>
         </div>
         <div class="actions">
           <span class="pill"><span id="statusDot" class="dot busy"></span><span id="statusText">Loading…</span></span>
@@ -220,7 +220,7 @@
 
   <main>
     <div class="note">
-      Opportunities are linked to the original funder or authoritative source. Eligibility, deadlines and terms can change, so check the source page before applying. This first version focuses on a small curated set of global-health funding sources.
+      Opportunities are linked to the original funder or authoritative source. Eligibility, deadlines and terms can change, so check the source page before applying
     </div>
 
     <div class="filters" aria-label="Funding opportunity filters">
@@ -255,7 +255,7 @@
   </main>
 
   <div class="footer">
-    Public research-funding discovery feed. Source content remains with the original organisations. Built to be lightweight and embeddable into simple HTML websites.
+    Global Health Research Funding Opportunities Feed. Source content remains with the original organisations.
   </div>
 
   <script>
@@ -390,7 +390,7 @@
 
     function render() {
       const items = filterItems();
-      summary.textContent = `${items.length} opportunity${items.length === 1 ? '' : 'ies'} shown from ${allItems.length} collected results`;
+      summary.textContent = `${items.length} opportunity${items.length === 1 ? 'y' : 'ies'} shown from ${allItems.length} collected results`;
 
       if (!items.length) {
         const selectedSource = SOURCES.find(source => source.id === sourceFilter.value);
